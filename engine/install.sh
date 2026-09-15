@@ -542,10 +542,11 @@ else
 fi
 
 # Idempotency: if already at target version, skip the download and move on.
+# Nothing was installed, so nothing is announced: the harness offer and the
+# quickstart link below are for someone who has just arrived, not for a
+# re-run that changed nothing.
 if [ -n "$from_version" ] && [ "$from_version" = "$release_version" ]; then
   info "$BIN_NAME is already at v$release_version — nothing to do"
-  echo ""
-  echo "If you're new to iii, get started quickly here: https://iii.dev/docs/quickstart"
   exit 0
 fi
 
@@ -850,5 +851,52 @@ case ":$PATH:" in
     ;;
 esac
 
-echo ""
-echo "If you're new to iii, get started quickly here: https://iii.dev/docs/quickstart"
+# ---------------------------------------------------------------------------
+# Onboarding: offer to start the harness.
+# stdin is the script itself under `curl ... | sh`, so read the answer from
+# /dev/tty. Skip silently when no terminal is attached (CI, Dockerfiles).
+# ---------------------------------------------------------------------------
+
+start_cmd="$BIN_NAME project init --learn-iii"
+quickstart_url="https://iii.dev/docs/quickstart"
+
+# Does the binary we just installed know `--learn-iii`? Ask the parser rather
+# than reading the help text: the help is a rendered table whose column widths
+# follow the longest flag, so whether a given flag survives as one string is a
+# property of the other flags beside it. `--help` short-circuits in the parser,
+# so an accepted flag prints help and scaffolds nothing.
+#
+# Probed ONCE, above the prompt. The check used to guard only the `exec`, so
+# answering `n` — or running with no terminal — still printed a command an
+# older binary rejects with `unexpected argument '--learn-iii'`.
+has_learn_iii=0
+if "$bin_dir/$BIN_NAME" project init --learn-iii --help >/dev/null 2>&1; then
+  has_learn_iii=1
+fi
+
+if [ "$has_learn_iii" = 0 ]; then
+  # Never offer what this binary cannot run, and never name the command.
+  echo ""
+  echo "If you're new to iii, get started quickly here: $quickstart_url"
+elif [ -t 2 ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+  echo ""
+  printf 'Would you like to start the iii harness and take a quick look at what iii can do? [Y/n] ' >/dev/tty
+  read -r _harness_answer </dev/tty || _harness_answer="n"
+  case "$_harness_answer" in
+    ""|[Yy]|[Yy][Ee][Ss])
+      # stdin is the script itself under `curl ... | sh`, and `exec` hands
+      # that pipe to init. Init asks for a provider API key only when stdin
+      # is a terminal, so piped installs skipped the question in silence.
+      # The enclosing `if` has already established /dev/tty is usable.
+      exec "$bin_dir/$BIN_NAME" project init --learn-iii </dev/tty
+      ;;
+    *)
+      echo "No problem. Start the harness anytime with:"
+      echo "  $start_cmd"
+      ;;
+  esac
+else
+  echo ""
+  echo "To start the iii harness and see what iii can do, run:"
+  echo "  $start_cmd"
+fi
