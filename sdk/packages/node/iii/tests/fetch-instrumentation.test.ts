@@ -43,7 +43,6 @@ vi.mock('@opentelemetry/sdk-metrics', () => ({
 vi.mock('@opentelemetry/sdk-logs', () => ({
   LoggerProvider: vi.fn().mockImplementation(() => ({
     getLogger: vi.fn().mockReturnValue({ emit: vi.fn() }),
-    addLogRecordProcessor: vi.fn(),
     forceFlush: vi.fn().mockResolvedValue(undefined),
     shutdown: vi.fn().mockResolvedValue(undefined),
   })),

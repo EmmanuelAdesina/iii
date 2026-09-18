@@ -38,8 +38,7 @@ describe('OTel exception recording', () => {
 
   it('recordException captures exception.stacktrace on error', async () => {
     exporter = new InMemorySpanExporter()
-    provider = new BasicTracerProvider()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] })
 
     const tracer = provider.getTracer('test-tracer')
 
@@ -73,8 +72,7 @@ describe('OTel exception recording', () => {
 
   it('successful span has no exception event', async () => {
     exporter = new InMemorySpanExporter()
-    provider = new BasicTracerProvider()
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] })
 
     const tracer = provider.getTracer('test-tracer')
 
