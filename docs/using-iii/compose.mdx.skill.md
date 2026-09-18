@@ -728,13 +728,23 @@ the error is `CONFIG_FETCH_FAILED`.
 
 ## The worker environment
 
-A worker's environment is defined by the following sources:
+A worker's environment combines the following sources, from lowest to highest precedence:
 
-1. A host baseline. On Unix: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `TMPDIR`, `TZ`,
-   `LANG`, `LC_ALL`. Windows adds the variables the platform needs, such as `SystemRoot`, `COMSPEC`,
-   and `PATHEXT`.
-2. The worker's `env_file` entries, then its `environment` map.
-3. The reserved variables, which the daemon owns.
+1. The machine environment visible to the Compose daemon. Variables are inherited even when
+   neither `env_file` nor `environment` is declared. Non-Unicode names and values are skipped.
+2. The worker's `env_file` entries, in declaration order. Later files override earlier files.
+3. The worker's `environment` map. Nonempty values override env files; an empty string preserves
+   an existing env-file value, or supplies an empty value when no env file defines the key.
+4. The reserved variables, which the daemon owns.
+
+Export machine variables before starting the daemon. Changing another shell's environment does
+not update an already-running daemon. Workers and hooks inherit the daemon's Unicode machine
+variables, including credentials, subject to the daemon-owned values above and the project identity
+exception below; only start workers you trust with that environment.
+
+`III_HOST_USER_ID` is not inherited from the machine: it comes from the current project's
+`.iii/project.ini`, or is absent when the project has no device ID. An explicit `env_file` or
+`environment` value can still override it, including an empty value.
 
 | Variable                | Value                                                                         |
 | ----------------------- | ----------------------------------------------------------------------------- |
@@ -889,6 +899,11 @@ Compose can output the following error codes:
 | Managed engine      | `ENGINE_SECTION_REQUIRES_MANAGED_START`, `ENGINE_ALREADY_OWNED`, `ENGINE_RESTART_REQUIRED`, `ENGINE_WORKER_IS_INJECTED`, `UNSUPPORTED_ENGINE_WORKER`, `INVALID_ENGINE_WORKER_CONFIG`, `INVALID_MANAGED_ENGINE_URL`, `MANAGED_ENGINE_ENDPOINT_MISMATCH`, `MANAGED_ENGINE_LISTENER_UNAVAILABLE`, `ENGINE_SPAWN_FAILED`, `ENGINE_STARTUP_TIMEOUT`, `ENGINE_EXITED` |
 | Daemon and project  | `NO_COMPOSE_FILE`, `WRONG_DAEMON`, `INVALID_NAMESPACE`, `UNKNOWN_CONTAINER`, `UNKNOWN_PROJECT`, `INVALID_STATE_FILE`, `STATE_DIR_UNAVAILABLE`, `DAEMON_ALREADY_SERVING`, `DAEMON_NAMESPACE_TAKEN`, `IO_ERROR`                                                                                                                                                   |
 | Command line        | `FILE_REQUIRES_UP`, `BUILD_CONFLICTS_WITH_SERVE_OPTIONS`                                                                                                                                                                                                                                                                                                        |
+
+These are literal diagnostic identifiers emitted by Compose, not worker categories.
+`ENGINE_WORKER_IS_BUILTIN` reports that a worker declared under `containers` is already supplied
+by the engine. Its name is retained for compatibility; it does not define a separate worker type.
+All workers follow the same Function/Trigger/Worker model.
 
 ## Related
 

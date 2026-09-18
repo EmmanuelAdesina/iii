@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     dag,
     error::{ComposeError, Result},
-    spawn::RESERVED_ENV,
+    spawn::is_reserved_env,
 };
 
 /// Default `pre_run` budget. A blocking migration or asset build routinely
@@ -553,7 +553,7 @@ fn validate_container(
     // user-supplied III_URL would look like it took effect.
     let mut environment = BTreeMap::new();
     for (name, value) in &raw.environment {
-        if RESERVED_ENV.contains(&name.as_str()) {
+        if is_reserved_env(name.as_str()) {
             return Err(ComposeError::ReservedEnvOverride {
                 container: key.to_string(),
                 name: name.clone(),
@@ -646,24 +646,43 @@ impl Container {
                 source,
             })?;
             for (name, value) in parse_env_file(&text) {
-                if RESERVED_ENV.contains(&name.as_str()) {
+                if is_reserved_env(name.as_str()) {
                     return Err(ComposeError::ReservedEnvOverride {
                         container: container_key.to_string(),
                         name,
                     });
                 }
-                env.insert(name, value);
+                merge_env_value(&mut env, name, value, false);
             }
         }
         for (name, value) in &self.environment {
-            if value.is_empty() {
-                // Optional host references must not erase a value from an env file.
-                env.entry(name.clone()).or_default();
-            } else {
-                env.insert(name.clone(), value.clone());
-            }
+            // Optional host references must not erase a value from an env file.
+            merge_env_value(&mut env, name.clone(), value.clone(), value.is_empty());
         }
         Ok(env)
+    }
+}
+
+/// Merge one source value using the host OS's environment-key semantics.
+/// Empty Compose values preserve an earlier value; env-file entries always win.
+fn merge_env_value(
+    env: &mut BTreeMap<String, String>,
+    name: String,
+    value: String,
+    preserve_existing: bool,
+) {
+    // Retain one spelling per native key, so source order, not BTreeMap's sort
+    // order, determines the value when the map reaches the child process.
+    #[cfg(windows)]
+    let name = env
+        .keys()
+        .find(|key| crate::spawn::windows_env_key_eq(key, &name))
+        .cloned()
+        .unwrap_or(name);
+    if preserve_existing {
+        env.entry(name).or_insert(value);
+    } else {
+        env.insert(name, value);
     }
 }
 
